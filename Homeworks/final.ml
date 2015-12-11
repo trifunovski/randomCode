@@ -1,4 +1,4 @@
-(* example final project skeleton file *)
+(* Maksim Trifunovski, Narin Luangrath, Irma Mazariego *)
 exception UNIMPLEMENTED
 exception BAD_STRING
 exception UNIFICATION_FAILURE
@@ -89,7 +89,7 @@ let rec aux_lexx chars =
             in (if bdy = '('
                 then (str,FUN)::(aux_lexx remainder)
                 else (str,CONST)::(aux_lexx remainder))
-       else raise UNIMPLEMENTED;;
+       else raise BAD_STRING;;
 
 (* FINISH UTILITY FUNCTIONS *)
 
@@ -221,5 +221,3 @@ let rec toString (s : substitution) : string =
 
 let unify (x : string) (y : string) : string = "{"^(toString (unify_terms
   (parse x) (parse y)))
-
-
