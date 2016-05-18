@@ -13,22 +13,19 @@ module Dan where
     sCtx : Tp → Ctx
     _,_ : Ctx → Ctx → Ctx
 
+mutual
   data _empty : Ctx → Set where
     sinE : · empty
     mulE : ∀ {Γ₁ Γ₂} → Γ₁ empty → Γ₂ empty → (Γ₁ , Γ₂) empty
 
-  data _single_ : Tp → Ctx → Set where
-    sinT : ∀{A} → A single (sCtx A)
-    mulT1 : ∀{Γ₁ Γ₂ A} → A single Γ₁ → Γ₂ empty → A single (Γ₁ , Γ₂)
-    mulT2 : ∀{Γ₁ Γ₂ A} → Γ₁ empty → A single Γ₂ → A single (Γ₁ , Γ₂)
+  data _decTo_and_ : Ctx → Ctx → Ctx → Set where
+    SD : ∀{A} → sCtx A decTo sCtx A and ·
+    MD1 : ∀ {A Γ₁' Γ₁ Γ₂} → Γ₁ decTo sCtx A and Γ₁' → (Γ₁ , Γ₂) decTo sCtx A and (Γ₁' , Γ₂)
+    MD2 : ∀ {A Γ₂' Γ₁ Γ₂} → Γ₂ decTo sCtx A and Γ₂' → (Γ₁ , Γ₂) decTo sCtx A and (Γ₁ , Γ₂')
 
   data _≡_ : Ctx → Ctx → Set where
-    refl : ∀{Γ} → Γ ≡ Γ
     emp : ∀{Γ₁ Γ₂} → Γ₁ empty → Γ₂ empty → Γ₁ ≡ Γ₂
-    leaf : ∀{A Γ₁ Γ₂} → A single Γ₁ → A single Γ₂ → Γ₁ ≡ Γ₂
-    node : ∀{Γ₁ Γ₂ Δ₁ Δ₂} → Either (Γ₁ ≡ Δ₁ × Γ₂ ≡ Δ₂)
-                                   (Γ₁ ≡ Δ₂ × Γ₂ ≡ Δ₁)
-                          → (Γ₁ , Γ₂) ≡ (Δ₁ , Δ₂)
+    decom : ∀{Γ Γ' Δ Δ' A} → Γ decTo sCtx A and Γ' → Δ decTo sCtx A and Δ' → Γ' ≡ Δ' → Γ ≡ Δ
 
   data _⊢s_ : Ctx → Ctx → Set where
     emptySub : · ⊢s ·
@@ -36,119 +33,112 @@ module Dan where
     comma : ∀ {Γ₁ Γ₂ Δ₁ Δ₂} → Γ₁ ⊢s Δ₁ → Γ₂ ⊢s Δ₂ → (Γ₁ , Γ₂) ⊢s (Δ₁ , Δ₂)
     equiv : ∀ {Γ Γ' Δ Δ'} → Γ ≡ Γ' → Γ' ⊢s Δ' → Δ' ≡ Δ → Γ ⊢s Δ
 
-  canthappen : ∀{A Γ} → Γ empty → A single Γ → Void
-  canthappen sinE ()
-  canthappen (mulE empt empt₁) (mulT1 sin x) = canthappen empt sin
-  canthappen (mulE empt empt₁) (mulT2 x sin) = canthappen empt₁ sin
+ -- {-# NO_TERMINATION_CHECK #-}
+  eitherLemma : (Γ : Ctx) → Either (Γ empty) (Σ[ A ∈ Tp ] Σ[ Γ' ∈ Ctx ] Γ decTo sCtx A and Γ')
+  eitherLemma · = Inl sinE
+  eitherLemma (sCtx x) = Inr (x , (· , SD))
+  eitherLemma (Γ₁ , Γ₂) with eitherLemma Γ₁
+  eitherLemma (Γ₁ , Γ₂) | Inr (a , Γ' , pf) = Inr (a , ((Γ' , Γ₂) , MD1 pf))
+  eitherLemma (Γ₁ , Γ₂) | Inl x with eitherLemma Γ₂
+  eitherLemma (Γ₁ , Γ₂) | Inl x₁ | Inl x = Inl (mulE x₁ x)
+  eitherLemma (Γ₁ , Γ₂) | Inl x₁ | Inr (a , Γ' , pf) = Inr (a , ((Γ₁ , Γ') , MD2 pf))
+
+  emptyEquiv : ∀ {Γ₁ Γ₂} → · ≡ (Γ₁ , Γ₂) → · ≡ Γ₁ × · ≡ Γ₂
+  emptyEquiv (emp x (mulE x₁ x₂)) = emp x x₁ , emp x x₂
+  emptyEquiv (decom () x₁ pf)
+
+  refl : ∀{Γ} → Γ ≡ Γ
+  refl = {!!}
+  -- refl {Γ} with eitherLemma Γ
+  -- refl {Γ} | Inl x = emp x x
+  -- refl {Γ} | Inr (a , Γ' , pf) = decom pf pf (refl {Γ'})
 
   sym : ∀{Γ₁ Γ₂} → Γ₁ ≡ Γ₂ → Γ₂ ≡ Γ₁
-  sym {·} {·} refl = refl
-  sym {·} {·} (emp x x₁) = refl
-  sym {·} {·} (leaf x x₁) = refl
-  sym {·} {sCtx x} (emp x₁ ())
-  sym {·} {sCtx x} (leaf x₁ sinT) = leaf sinT x₁
-  sym {·} {Γ₂ , Γ₃} (emp x x₁) = emp x₁ x
-  sym {·} {Γ₂ , Γ₃} (leaf () x₁)
-  sym {sCtx x} {·} (emp () x₂)
-  sym {sCtx x} {·} (leaf x₁ ())
-  sym {sCtx x} {sCtx .x} refl = refl
-  sym {sCtx x} {sCtx x₁} (emp () x₃)
-  sym {sCtx x} {sCtx x₁} (leaf x₂ x₃) = leaf x₃ x₂
-  sym {sCtx x} {Γ₂ , Γ₃} (emp () x₂)
-  sym {sCtx x} {Γ₂ , Γ₃} (leaf x₁ x₂) = leaf x₂ x₁
-  sym {Γ₁ , Γ₂} {·} (emp x x₁) = emp x₁ x
-  sym {Γ₁ , Γ₂} {·} (leaf x ())
-  sym {Γ₁ , Γ₂} {sCtx x} (emp x₁ ())
-  sym {Γ₁ , Γ₂} {sCtx x} (leaf x₁ x₂) = leaf x₂ x₁
-  sym {Γ₁ , Γ₂} {.Γ₁ , .Γ₂} refl = refl
-  sym {Γ₁ , Γ₂} {Γ₃ , Γ₄} (emp x x₁) = emp x₁ x
-  sym {Γ₁ , Γ₂} {Γ₃ , Γ₄} (leaf x x₁) = leaf x₁ x
-  sym {Γ₁ , Γ₂} {Γ₃ , Γ₄} (node (Inl (fst , snd))) = node (Inl (sym fst , sym snd))
-  sym {Γ₁ , Γ₂} {Γ₃ , Γ₄} (node (Inr (fst , snd))) = node (Inr (sym snd , sym fst))
+  sym (emp x x₁) = emp x₁ x
+  sym (decom x x₁ pf) = decom x₁ x (sym pf)
 
   lemma : ∀{Γ Δ} → Γ empty → Γ ≡ Δ → Δ empty
-  lemma sinE refl = sinE
   lemma sinE (emp x x₁) = x₁
-  lemma sinE (leaf () x₁)
-  lemma (mulE empty empty₁) refl = mulE empty empty₁
-  lemma (mulE empty empty₁) (emp x x₁) = x₁
-  lemma (mulE empty empty₁) (leaf (mulT1 x x₁) x₂) = abort (canthappen empty x)
-  lemma (mulE empty empty₁) (leaf (mulT2 x x₁) x₂) = abort (canthappen empty₁ x₁)
-  lemma (mulE empty empty₁) (node (Inl (fst , snd))) = mulE (lemma empty fst) (lemma empty₁ snd)
-  lemma (mulE empty empty₁) (node (Inr (fst , snd))) = mulE (lemma empty₁ snd) (lemma empty fst)
+  lemma sinE (decom x x₁ pf) = abort (lemmaEmptyDecom sinE x)
+  lemma (mulE empt empt₁) (emp x x₁) = x₁
+  lemma (mulE {Γ₁}{Γ₂} empt empt₁) (decom x x₁ pf) = abort (lemmaEmptyDecom (mulE empt empt₁) x)
 
-  lemmaAB : ∀{A B Γ Δ} → A single Γ → B single Γ → B single Δ → A single Δ
-  lemmaAB sinT sinT s3 = s3
-  lemmaAB (mulT1 s1 x) (mulT1 s2 x₁) s3 = lemmaAB s1 s2 s3
-  lemmaAB (mulT1 s1 x) (mulT2 x₁ s2) s3 = abort (canthappen x₁ s1)
-  lemmaAB (mulT2 x s1) (mulT1 s2 x₁) s3 = abort (canthappen x₁ s1)
-  lemmaAB (mulT2 x s1) (mulT2 x₁ s2) s3 = lemmaAB s1 s2 s3
+  lemmaEmptyDecom : ∀{Γ A Δ} → Γ empty → Γ decTo sCtx A and Δ → Void
+  lemmaEmptyDecom sinE ()
+  lemmaEmptyDecom (mulE empt empt₁) (MD1 decpf) = lemmaEmptyDecom empt decpf
+  lemmaEmptyDecom (mulE empt empt₁) (MD2 decpf) = lemmaEmptyDecom empt₁ decpf
 
-  lemmaSin : ∀{Γ Δ A} → A single Γ → Γ ≡ Δ → A single Δ
-  lemmaSin sinT refl = sinT
-  lemmaSin sinT (emp () x₁)
-  lemmaSin sinT (leaf sinT x₁) = x₁
-  lemmaSin (mulT1 sing x) refl = mulT1 sing x
-  lemmaSin (mulT1 sing x) (emp (mulE x₁ x₂) x₃) = abort (canthappen x₁ sing)
-  lemmaSin (mulT1 sing x) (leaf (mulT1 x₁ x₂) x₃) = lemmaAB sing x₁ x₃
-  lemmaSin (mulT1 sing x) (leaf (mulT2 x₁ x₂) x₃) = abort (canthappen x₁ sing)
-  lemmaSin (mulT1 sing x) (node (Inl (fst , snd))) = mulT1 (lemmaSin sing fst) (lemma x snd)
-  lemmaSin (mulT1 sing x) (node (Inr (fst , snd))) = mulT2 (lemma x snd) (lemmaSin sing fst)
-  lemmaSin (mulT2 x sing) refl = mulT2 x sing
-  lemmaSin (mulT2 x sing) (emp (mulE x₁ x₂) x₃) = abort (canthappen x₂ sing)
-  lemmaSin (mulT2 x sing) (leaf (mulT1 x₁ x₂) x₃) = abort (canthappen x₂ sing)
-  lemmaSin (mulT2 x sing) (leaf (mulT2 x₁ x₂) x₃) = lemmaAB sing x₂ x₃
-  lemmaSin (mulT2 x sing) (node (Inl (fst , snd))) = mulT2 (lemma x fst) (lemmaSin sing snd)
-  lemmaSin (mulT2 x sing) (node (Inr (fst , snd))) = mulT1 (lemmaSin sing snd) (lemma x fst)
+  anotherLemma : ∀ {Γ Δ A} → Γ ≡ (sCtx A , Δ) → Γ decTo sCtx A and Δ
+  anotherLemma (emp x (mulE () x₂))
+  anotherLemma (decom x (MD1 SD) pf) = {!!}
+  anotherLemma (decom x (MD2 x₁) pf) = {!anotherLemma pf!}
+
+  weirdLemma : ∀{Γ A Δ} → Γ decTo sCtx A and Δ → Γ ≡ (sCtx A , Δ)
+  weirdLemma SD = decom SD (MD1 SD) (emp sinE (mulE sinE sinE))
+  weirdLemma (MD1 pf) = {!!} --weirdLemma (MD1 (anotherLemma (weirdLemma pf)))
+  weirdLemma (MD2 pf) = {!!}
+
+  eqDec : ∀ {Γ A Δ₁ Δ₂} → Γ decTo sCtx A and Δ₁ → Δ₁ ≡ Δ₂ → Γ decTo sCtx A and Δ₂
+  eqDec decpf eq = {!!}
+
+  specificLemma : ∀ {Γ Γ' Δ Δ' A B} → Γ decTo sCtx A and Δ
+                                    → Γ decTo sCtx B and Δ'
+                                    → Γ' decTo sCtx B and Δ'
+                                    → Γ' decTo sCtx A and Δ
+  specificLemma SD SD SD = SD
+  specificLemma (MD1 dec1) (MD1 dec2) (MD1 dec3) = MD1 (specificLemma dec1 dec2 dec3)
+  specificLemma (MD1 dec1) (MD1 dec2) (MD2 dec3) = {!!}
+  specificLemma (MD1 dec1) (MD2 dec2) (MD1 dec3) = {!!}
+  specificLemma (MD1 dec1) (MD2 dec2) (MD2 dec3) = {!!}
+  specificLemma (MD2 dec1) (MD1 dec2) (MD1 dec3) = {!!}
+  specificLemma (MD2 dec1) (MD1 dec2) (MD2 dec3) = {!!}
+  specificLemma (MD2 dec1) (MD2 dec2) (MD1 dec3) = {!!}
+  specificLemma (MD2 dec1) (MD2 dec2) (MD2 dec3) = MD2 (specificLemma dec1 dec2 dec3)
 
   trans : ∀{Γ₁ Γ₂ Γ₃} → Γ₁ ≡ Γ₂ → Γ₂ ≡ Γ₃ → Γ₁ ≡ Γ₃
-  trans refl pf = pf
-  trans (emp x x₁) refl = emp x x₁
   trans (emp x x₁) (emp x₂ x₃) = emp x x₃
-  trans {Γ₂ = ·} (emp x x₁) (leaf () x₃)
-  trans {Γ₂ = sCtx x} (emp x₁ ()) (leaf x₃ x₄)
-  trans {Γ₂ = Γ₂ , Γ₃} (emp x x₂) (leaf x₃ x₄) = abort (canthappen x₂ x₃)
-  trans (emp x (mulE x₁ x₂)) (node (Inl (fst , snd))) = emp x (mulE (lemma x₁ fst) (lemma x₂ snd))
-  trans (emp x (mulE x₁ x₂)) (node (Inr (fst , snd))) = emp x (mulE (lemma x₂ snd) (lemma x₁ fst))
-  trans (leaf x x₁) refl = leaf x x₁
-  trans (leaf x x₁) (emp x₂ x₃) = abort (canthappen x₂ x₁)
-  trans (leaf x x₁) (leaf x₂ x₃) = leaf x (lemmaAB x₁ x₂ x₃)
-  trans (leaf x (mulT1 x₁ x₂)) (node (Inl (fst , snd))) = leaf x (mulT1 (lemmaSin x₁ fst) (lemma x₂ snd))
-  trans (leaf x (mulT2 x₁ x₂)) (node (Inl (fst , snd))) = leaf x (mulT2 (lemma x₁ fst) (lemmaSin x₂ snd))
-  trans (leaf x (mulT1 x₁ x₂)) (node (Inr (fst , snd))) = leaf x (mulT2 (lemma x₂ snd) (lemmaSin x₁ fst))
-  trans (leaf x (mulT2 x₁ x₂)) (node (Inr (fst , snd))) = leaf x (mulT1 (lemmaSin x₂ snd) (lemma x₁ fst))
-  trans (node x) refl = node x
-  trans (node (Inl (fst , snd))) (emp (mulE x₁ x₂) x₃) = emp (mulE (lemma x₁ (sym fst)) (lemma x₂ (sym snd))) x₃
-  trans (node (Inr (fst , snd))) (emp (mulE x₁ x₂) x₃) = emp (mulE (lemma x₂ (sym fst)) (lemma x₁ (sym snd))) x₃
-  trans (node (Inl (fst , snd))) (leaf (mulT1 x₁ x) x₂) = leaf (mulT1 (lemmaSin x₁ (sym fst)) (lemma x (sym snd))) x₂
-  trans (node (Inl (fst , snd))) (leaf (mulT2 x x₁) x₂) = leaf (mulT2 (lemma x (sym fst)) (lemmaSin x₁ (sym snd))) x₂
-  trans (node (Inr (fst , snd))) (leaf (mulT1 x₁ x₂) x₃) = leaf (mulT2 (lemma x₂ (sym fst)) (lemmaSin x₁ (sym snd))) x₃
-  trans (node (Inr (fst , snd))) (leaf (mulT2 x₁ x₂) x₃) = leaf (mulT1 (lemmaSin x₂ (sym fst)) (lemma x₁ (sym snd))) x₃
-  trans (node (Inl (fst , snd))) (node (Inl (fst₁ , snd₁))) = node (Inl ((trans fst fst₁) , trans snd snd₁))
-  trans (node (Inl (fst , snd))) (node (Inr (fst₁ , snd₁))) = node (Inr ((trans fst fst₁) , (trans snd snd₁)))
-  trans (node (Inr (fst , snd))) (node (Inl (fst₁ , snd₁))) = node (Inr (trans fst snd₁ , trans snd fst₁))
-  trans (node (Inr (fst , snd))) (node (Inr (fst₁ , snd₁))) = node (Inl ((trans fst snd₁) , (trans snd fst₁)))
+  trans (emp x x₁) (decom x₂ x₃ pf2) = abort (lemmaEmptyDecom x₁ x₂)
+  trans (decom x x₁ pf1) (emp x₂ x₃) = abort (lemmaEmptyDecom x₂ x₁)
+  trans (decom x x₁ pf1) (decom x₂ x₃ pf2) = decom x (specificLemma x₁ x₂ (eqDec x₃ (sym pf2))) pf1 -- decom x (anotherLemma (trans (sym pf2) (weirdLemma x₁))) pf1
+
 
   comm : ∀{Γ₁ Γ₂} → (Γ₁ , Γ₂) ≡ (Γ₂ , Γ₁)
-  comm {Γ₁}{Γ₂} = node (Inr (refl , refl))
+  comm = {!!}
+  -- comm {Γ₁}{Γ₂} with eitherLemma Γ₁
+  -- comm | Inr (A , Γ₁' , pf) = decom (MD1 pf) (MD2 pf) comm
+  -- comm {Γ₁}{Γ₂} | Inl x₁ with eitherLemma Γ₂
+  -- ... | Inl x = emp (mulE x₁ x) (mulE x x₁)
+  -- ... | Inr (A , Γ₂' , pf) = decom (MD2 pf) (MD1 pf) comm
 
-  -- assoc : ∀{Γ₁ Γ₂ Γ₃} → (Γ₁ , (Γ₂ , Γ₃)) ≡ ((Γ₁ , Γ₂) , Γ₃)
-  -- assoc {Γ₁}{Γ₂}{Γ₃} = {!!}
+
+  assoc : ∀{Γ₁ Γ₂ Γ₃} → (Γ₁ , (Γ₂ , Γ₃)) ≡ ((Γ₁ , Γ₂) , Γ₃)
+  assoc = {!!}
+  -- assoc {Γ₁}{Γ₂}{Γ₃} with eitherLemma Γ₁
+  -- assoc | Inr (A , Γ₁' , pf) = decom (MD1 pf) (MD1 (MD1 pf)) assoc
+  -- assoc {Γ₁}{Γ₂}{Γ₃} | Inl x with eitherLemma Γ₂
+  -- assoc | Inl x₁ | Inr (A , Γ₂' , pf) = decom (MD2 (MD1 pf)) (MD1 (MD2 pf)) assoc
+  -- assoc {Γ₁}{Γ₂}{Γ₃} | Inl x₁ | Inl x with eitherLemma Γ₃
+  -- assoc | Inl x₂ | Inl x₁ | Inr (A , Γ₃' , pf) = decom (MD2 (MD2 pf)) (MD2 pf) assoc
+  -- assoc | Inl x₂ | Inl x₁ | Inl x = emp (mulE x₂ (mulE x₁ x)) (mulE (mulE x₂ x₁) x)
+
+  emptySubLemma : ∀ {Γ Δ} → Γ ⊢s Δ → Δ empty → Γ empty
+  emptySubLemma emptySub empt = empt
+  emptySubLemma var ()
+  emptySubLemma (comma sub sub₁) (mulE empt empt₁) = mulE (emptySubLemma sub empt) (emptySubLemma sub₁ empt₁)
+  emptySubLemma (equiv x sub x₁) empt = lemma (emptySubLemma sub (lemma empt (sym x₁))) (sym x)
+
+  lemmaSingleEmpty : ∀ {Γ A Δ} → Γ decTo sCtx A and Δ → · ≡ Δ → Γ ≡ sCtx A
+  lemmaSingleEmpty SD empteq = decom SD SD empteq
+  lemmaSingleEmpty (MD1 decpf) empteq = decom (MD1 decpf) SD (sym empteq)
+  lemmaSingleEmpty (MD2 decpf) empteq = decom (MD2 decpf) SD (sym empteq)
 
   dan : (Γ Γ' Γ₁' Γ₂' : Ctx) → Γ ⊢s Γ' → Γ' ≡ (Γ₁' , Γ₂') → Σ[ Γ₁ ∈ Ctx ] Σ[ Γ₂ ∈ Ctx ] (Γ₁ , Γ₂) ≡ Γ × Γ₁ ⊢s Γ₁' × Γ₂ ⊢s Γ₂'
-  dan .· .· Γ₁' Γ₂' emptySub (emp x (mulE x₁ x₂)) = · , · , emp (mulE x x) x , equiv refl emptySub (emp x x₁) , equiv refl emptySub (emp x x₂)
-  dan .· .· Γ₁' Γ₂ emptySub (leaf () (mulT1 x₁ x₂))
-  dan .· .· Γ₁' Γ₂ emptySub (leaf () (mulT2 x₁ x₂))
+  dan .· .· Γ₁' Γ₂' emptySub (emp x (mulE x₁ x₂)) = · , · , emp (mulE x x) x , equiv (emp x x) emptySub (emp x x₁) , equiv (emp x x) emptySub (emp x x₂)
+  dan .· .· Γ₁' Γ₂' emptySub (decom () x₁ pf)
   dan ._ ._ Γ₁' Γ₂' var (emp () x₁)
-  dan ._ ._ Γ₁' Γ₂ var (leaf {A} x (mulT1 x₁ x₂)) = sCtx A , · , leaf (mulT1 sinT sinE) x , equiv refl var (leaf sinT x₁) , equiv refl emptySub (emp sinE x₂)
-  dan ._ ._ Γ₁' Γ₂ var (leaf {A} x (mulT2 x₁ x₂)) = · , sCtx A , leaf (mulT2 sinE sinT) x , equiv refl emptySub (emp sinE x₁) , equiv refl var (leaf sinT x₂)
-  dan ._ .(Γ₁' , Γ₂') Γ₁' Γ₂' (comma {Γ₁}{Γ₂} sub sub₁) refl = Γ₁ , Γ₂ , refl , sub , sub₁
-  dan ._ ._ Γ₁' Γ₂' (comma{Γ₁}{Γ₂} sub sub₁) (emp (mulE x x₁) (mulE x₂ x₃)) = Γ₁ , Γ₂ , refl , equiv refl sub (emp x x₂) , equiv refl sub₁ (emp x₁ x₃)
-  dan ._ ._ Γ₁' Γ₂' (comma{Γ₁}{Γ₂} sub sub₁) (leaf {A} (mulT1 x x₁) (mulT1 x₂ x₃)) = Γ₁ , Γ₂ , refl , equiv refl sub (leaf x x₂) , equiv refl sub₁ (emp x₁ x₃)
-  dan ._ ._ Γ₁' Γ₂' (comma{Γ₁}{Γ₂} sub sub₁) (leaf {A} (mulT1 x x₁) (mulT2 x₂ x₃)) = Γ₂ , Γ₁ , comm , equiv refl sub₁ (emp x₁ x₂) , equiv refl sub (leaf x x₃)
-  dan ._ ._ Γ₁' Γ₂' (comma{Γ₁}{Γ₂} sub sub₁) (leaf {A} (mulT2 x x₁) (mulT1 x₂ x₃)) = Γ₂ , Γ₁ , comm , equiv refl sub₁ (leaf x₁ x₂) , equiv refl sub (emp x x₃)
-  dan ._ ._ Γ₁' Γ₂' (comma{Γ₁}{Γ₂} sub sub₁) (leaf {A} (mulT2 x x₁) (mulT2 x₂ x₃)) = Γ₁ , Γ₂ , refl , equiv refl sub (emp x x₂) , equiv refl sub₁ (leaf x₁ x₃)
-  dan ._ ._ Γ₁' Γ₂' (comma{Γ₁}{Γ₂} sub₁ sub) (node (Inl (fst , snd))) = Γ₁ , Γ₂ , refl , equiv refl sub₁ fst , equiv refl sub snd
-  dan ._ ._ Γ₁' Γ₂' (comma{Γ₁}{Γ₂} sub₁ sub) (node (Inr (fst , snd))) = Γ₂ , Γ₁ , comm , equiv refl sub snd , equiv refl sub₁ fst
+  dan ._ ._ Γ₁' Γ₂' (var {A}) (decom SD (MD1 x₁) eq) = sCtx A , · , decom (MD1 SD) SD (emp (mulE sinE sinE) sinE) , equiv refl var (sym (lemmaSingleEmpty x₁ (fst (emptyEquiv eq)))) , equiv (emp sinE sinE) emptySub (snd (emptyEquiv eq))
+  dan ._ ._ Γ₁' Γ₂' (var {A}) (decom SD (MD2 x₁) eq) = · , sCtx A , decom (MD2 SD) SD (emp (mulE sinE sinE) sinE) , equiv (emp sinE sinE) emptySub (fst (emptyEquiv eq)) , equiv refl var (sym (lemmaSingleEmpty x₁ (snd (emptyEquiv eq))))
+  dan ._ ._ Γ₁' Γ₂' (comma sub sub₁) (emp (mulE x x₁) (mulE x₂ x₃)) = · , · , emp (mulE sinE sinE) (mulE (emptySubLemma sub x) (emptySubLemma sub₁ x₁)) , equiv (emp sinE sinE) emptySub (emp sinE x₂) , equiv (emp sinE sinE) emptySub (emp sinE x₃)
+  dan ._ ._ Γ₁' Γ₂' (comma sub sub₁) (decom x x₁ pf) = {!!}
   dan Γ Γ' Γ₁' Γ₂' (equiv x sub x₁) pf with dan _ _ _ _ sub (trans x₁ pf)
   ... | Γ1 , Γ2 , split , sub1 , sub2 = Γ1 , Γ2 , trans split (sym x) , sub1 , sub2
