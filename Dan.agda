@@ -1,7 +1,6 @@
 open import Preliminaries
 
 module Dan where
-infix 80 sCtx
 
 data Tp : Set where
     P : Tp
@@ -65,7 +64,7 @@ mutual
   trans (emp x x₁) (emp x₂ x₃) = emp x x₃
   trans (emp x x₁) (decom x₂ x₃ pf2) = abort (lemmaEmptyDecom x₁ x₂)
   trans (decom x x₁ pf1) (emp x₂ x₃) = abort (lemmaEmptyDecom x₂ x₁)
-  trans (decom x x₁ pf1) (decom x₂ x₃ pf2) = {!!} -- decom x (specificLemma x₁ x₂ (eqDec x₃ (sym pf2))) pf1
+  trans (decom x x₁ pf1) (decom x₂ x₃ pf2) = {!!} --decom x (specificLemma x₁ x₂ (decProp1 x₃ (sym pf2))) pf1
 
   unitL : ∀ {Γ} → (· , Γ) ≡ Γ
   unitL {·} = emp (mulE sinE sinE) sinE
@@ -85,6 +84,64 @@ mutual
 
 
 
+  decProp : ∀{Γ Γ' A Δ} → Γ decTo sCtx A and Δ → Γ ≡ Γ' → Σ[ Δ' ∈ Ctx ] (Γ' decTo sCtx A and Δ' × Δ ≡ Δ')
+  decProp (SD x) (emp () x₂)
+  decProp (SD x) (decom {Δ' = Δ'} (SD x₁) x₂ eqpf) = Δ' , (x₂ , (emp x (lemma x₁ eqpf)))
+  decProp (MD1 decpf) (emp (mulE x x₁) x₂) = abort (lemmaEmptyDecom x decpf)
+  decProp {Γ = (Γ₁ , Γ₂)}{Γ' = Γ'}{A = A}{Δ = (Γ₁' , .Γ₂)} (MD1 decpf) (decom x x₁ eqpf) = {!!}
+  decProp (MD2 decpf) (emp (mulE x x₁) x₂) = abort (lemmaEmptyDecom x₁ decpf)
+  decProp (MD2 decpf) (decom x x₁ eqpf) = {!!}
+
+  decProp0a : ∀{Γ A Δ} → Γ decTo sCtx A and Δ → Γ ≡ (sCtx A , Δ)
+  decProp0a (SD x) = decom (SD x) (MD1 (SD x)) (emp x (mulE x x))
+  decProp0a (MD1 decpf) = {!!} --trans (cong (decProp0a decpf) refl) (sym assoc)
+  decProp0a (MD2 decpf) = {!!} --trans (trans (cong (refl) (trans (decProp0a decpf) comm)) assoc) comm
+
+  decProp1 : ∀{Γ A Δ₁ Δ₂} → Γ decTo sCtx A and Δ₁ → Δ₁ ≡ Δ₂ → Γ decTo sCtx A and Δ₂
+  decProp1 {·} () eqpf
+  decProp1 {sCtx A} (SD x) eqpf = SD (lemma x eqpf)
+  decProp1 {Γ₁ , Γ₂} {A} {Δ₂ = Δ₂} (MD1 {Γ₁' = Γ₁'} decpf) (emp (mulE x x₁) x₂) = decomposeToSingle (addEmptyCtx (weirdLemma decpf x) x₁) x₂
+  decProp1 {Γ₁ , Γ₂} (MD1 decpf) (decom x x₁ eqpf) = {!!}
+  decProp1 {Γ₁ , Γ₂} {A} {Δ₂ = Δ₂} (MD2 {Γ₂' = Γ₂'} decpf) (emp (mulE x x₁) x₂) = decomposeToSingle (switchLemma (addEmptyCtx (weirdLemma decpf x₁) x)) x₂
+  decProp1 {Γ₁ , Γ₂} (MD2 decpf) (decom x x₁ eqpf) = {!!}
+  
+  decProp2 : ∀{Γ₁ Γ₂ A Δ} → Γ₁ decTo sCtx A and Δ → Γ₁ ≡ Γ₂ → Γ₂ decTo sCtx A and Δ
+  decProp2 (SD x) (emp () x₂)
+  decProp2 (SD x) (decom (SD x₁) x₂ eqpf) = {!!}
+  decProp2 (MD1 decpf) (emp (mulE x x₁) x₂) = abort (lemmaEmptyDecom x decpf)
+  decProp2 (MD1 decpf) (decom x x₁ eqpf) = {!!}
+  decProp2 (MD2 decpf) (emp (mulE x x₁) x₂) = abort (lemmaEmptyDecom x₁ decpf)
+  decProp2 (MD2 decpf) (decom x x₁ eqpf) = {!!}
+
+  decProp3 : ∀{Γ A B Δ} → Γ decTo sCtx A and Δ → Γ decTo sCtx B and Δ → sCtx A ≡ sCtx B
+  decProp3 (SD x) (SD x₁) = decom (SD x₁) (SD x₁) (emp x₁ x₁)
+  decProp3 (MD1 dec1) (MD1 dec2) = decProp3 dec1 dec2
+  decProp3 (MD1 dec1) (MD2 dec2) = abort (decError dec2)
+  decProp3 (MD2 dec1) (MD1 dec2) = abort (decError dec2)
+  decProp3 (MD2 dec1) (MD2 dec2) = decProp3 dec1 dec2
+
+  decError : ∀ {Γ A} → Γ decTo sCtx A and Γ → Void
+  decError (SD ())
+  decError (MD1 dec) = decError dec
+  decError (MD2 dec) = decError dec
+
+  decProp4 : ∀{Γ A Δ₁ Δ₂} → Γ decTo sCtx A and Δ₁ → Γ decTo sCtx A and Δ₂ → Δ₁ ≡ Δ₂
+  decProp4 (SD x) (SD x₁) = emp x x₁
+  decProp4 (MD1 dec1) (MD1 dec2) = cong (decProp4 dec1 dec2) refl
+  decProp4 (MD1 dec1) (MD2 dec2) = {!!}
+  decProp4 (MD2 dec1) (MD1 dec2) = {!!}
+  decProp4 (MD2 dec1) (MD2 dec2) = cong refl (decProp4 dec1 dec2)
+
+  decProp5 : ∀{Γ₁ Γ₂ A Δ} → Γ₁ decTo sCtx A and Δ → Γ₂ decTo sCtx A and Δ → Γ₁ ≡ Γ₂
+  decProp5 (SD x) (SD x₁) = decom (SD x₁) (SD x₁) (emp x₁ x₁)
+  decProp5 (SD x) (MD1 dec2) = decom (SD x) (MD1 dec2) (emp x x)
+  decProp5 (SD x) (MD2 dec2) = decom (SD x) (MD2 dec2) (emp x x)
+  decProp5 (MD1 dec1) (SD x) = decom (MD1 dec1) (SD x) (emp x x)
+  decProp5 (MD1 dec1) (MD1 dec2) = cong (decProp5 dec1 dec2) refl
+  decProp5 (MD1 dec1) (MD2 dec2) = {!!}
+  decProp5 (MD2 dec1) (SD x) = decom (MD2 dec1) (SD x) (emp x x)
+  decProp5 (MD2 dec1) (MD1 dec2) = {!!}
+  decProp5 (MD2 dec1) (MD2 dec2) = cong refl (decProp5 dec1 dec2)
 
 
 
@@ -116,20 +173,10 @@ mutual
   addEmptyCtx (emp x x₁) empt = emp (mulE x empt) x₁
   addEmptyCtx (decom x x₁ eqpf) empt = decom (MD1 x) x₁ (addEmptyCtx eqpf empt)
 
-  addEmptyDec : ∀ {Γ₁ Γ₂ Δ A} → Γ₁ decTo sCtx A and Δ → Γ₂ empty → (Γ₁ , Γ₂) decTo sCtx A and Δ
-  addEmptyDec (SD sinE) empt = {!SD sinE!}
-  addEmptyDec (SD (mulE x x₁)) empt = {!!}
-  addEmptyDec (MD1 decpf) empt = {!!}
-  addEmptyDec (MD2 decpf) empt = {!!}
-
   switchLemma : ∀ {Γ₁ Γ₂ Δ} → (Γ₁ , Γ₂) ≡ Δ → (Γ₂ , Γ₁) ≡ Δ
   switchLemma (emp (mulE x x₁) x₂) = emp (mulE x₁ x) x₂
   switchLemma (decom (MD1 x) x₁ eqpf) = decom (MD2 x) x₁ (switchLemma eqpf)
   switchLemma (decom (MD2 x) x₁ eqpf) = decom (MD1 x) x₁ (switchLemma eqpf)
-
-  switchLemmaDec : ∀ {Γ₁ Γ₂ A Δ} → (Γ₁ , Γ₂) decTo sCtx A and Δ → (Γ₂ , Γ₁) decTo sCtx A and Δ
-  switchLemmaDec (MD1 decpf) = {!!}
-  switchLemmaDec (MD2 decpf) = {!!}
 
   weirdLemma : ∀{Γ Δ A} → Γ decTo sCtx A and Δ → Δ empty → Γ ≡ sCtx A
   weirdLemma (SD x) empt = decom (SD empt) (SD empt) (emp empt empt)
@@ -138,30 +185,25 @@ mutual
 
   swapEmptyCtx : ∀{Γ A Δ₁ Δ₂} → Γ decTo sCtx A and Δ₁ → Δ₁ empty → Δ₂ empty → Γ decTo sCtx A and Δ₂
   swapEmptyCtx (SD x) emp1 emp2 = SD emp2
-  swapEmptyCtx (MD1 decpf) (mulE emp1 emp2) emp3 = addEmptyDec (swapEmptyCtx decpf emp1 emp3) emp2
-  swapEmptyCtx (MD2 decpf) (mulE emp1 emp2) emp3 = switchLemmaDec (addEmptyDec (swapEmptyCtx decpf emp2 emp3) emp1)
+  swapEmptyCtx (MD1 decpf) (mulE emp1 emp2) emp3 = decProp2 (swapEmptyCtx decpf emp1 emp3) (sym (addEmptyCtx refl emp2))
+  swapEmptyCtx (MD2 decpf) (mulE emp1 emp2) emp3 = decProp2 (swapEmptyCtx decpf emp2 emp3) (sym (switchLemma (addEmptyCtx refl emp1)))
 
   decomposeToSingle : ∀ {Γ Δ A} → Γ ≡ sCtx A → Δ empty → Γ decTo sCtx A and Δ
   decomposeToSingle (emp x ()) empt
   decomposeToSingle (decom x (SD x₁) (emp x₂ x₃)) empt = swapEmptyCtx x x₂ empt
   decomposeToSingle (decom x (SD x₁) (decom x₂ x₃ eqpf)) empt = abort (lemmaEmptyDecom x₁ x₃)
-
-  eqDec : ∀ {Γ A Δ₁ Δ₂} → Γ decTo sCtx A and Δ₁ → Δ₁ ≡ Δ₂ → Γ decTo sCtx A and Δ₂
-  eqDec {·} () eqpf
-  eqDec {sCtx A} (SD x) eqpf = SD (lemma x eqpf)
-  eqDec {Γ₁ , Γ₂} {A} {Δ₂ = Δ₂} (MD1 {Γ₁' = Γ₁'} decpf) (emp (mulE x x₁) x₂) = decomposeToSingle (addEmptyCtx (weirdLemma decpf x) x₁) x₂
-  eqDec {Γ₁ , Γ₂} (MD1 decpf) (decom x x₁ eqpf) = {!!}
-  eqDec {Γ₁ , Γ₂} {A} {Δ₂ = Δ₂} (MD2 {Γ₂' = Γ₂'} decpf) (emp (mulE x x₁) x₂) = decomposeToSingle (switchLemma (addEmptyCtx (weirdLemma decpf x₁) x)) x₂
-  eqDec {Γ₁ , Γ₂} (MD2 decpf) (decom x x₁ eqpf) = {!!}
+  
 
   specificLemma : ∀ {Γ Γ' Δ Δ' A B} → Γ decTo sCtx A and Δ
                                     → Γ decTo sCtx B and Δ'
                                     → Γ' decTo sCtx B and Δ'
                                     → Γ' decTo sCtx A and Δ
   specificLemma dec1 (SD x) (SD x₁) = dec1
-  specificLemma (SD x) (SD (mulE x₁ x₂)) dec3 = eqDec dec3 (emp (mulE x₁ x₂) x)
-  specificLemma dec1 (MD1 dec2) (SD (mulE x x₁)) = {!!}
-  specificLemma dec1 (MD2 dec2) (SD (mulE x x₁)) = {!!}
+  specificLemma (SD x) (SD (mulE x₁ x₂)) dec3 = decProp1 dec3 (emp (mulE x₁ x₂) x)
+  specificLemma (MD1 dec1) (MD1 dec2) (SD (mulE x x₁)) = {!!}
+  specificLemma (MD2 dec1) (MD1 dec2) (SD (mulE x x₁)) = {!!}
+  specificLemma (MD1 dec1) (MD2 dec2) (SD (mulE x x₁)) = {!!}
+  specificLemma (MD2 dec1) (MD2 dec2) (SD (mulE x x₁)) = {!!}
   specificLemma (MD2 dec1) (MD1 dec2) (MD1 dec3) = {!!}
   specificLemma (MD1 dec1) (MD1 dec2) (MD2 dec3) = {!!}
   specificLemma (MD2 dec1) (MD1 dec2) (MD2 dec3) = {!!}
@@ -190,6 +232,32 @@ mutual
   subItselfLemma {·} = emptySub
   subItselfLemma {sCtx x} = var
   subItselfLemma {Γ₁ , Γ₂} = comma subItselfLemma subItselfLemma
+
+  flipSub : ∀ {Γ Δ} → Γ ⊢s Δ → Δ ⊢s Γ
+  flipSub emptySub = emptySub
+  flipSub var = var
+  flipSub (comma sub sub₁) = comma (flipSub sub) (flipSub sub₁)
+  flipSub (equiv x sub x₁) = equiv (sym x₁) (flipSub sub) (sym x)
+
+  subEqLemma : ∀{Γ Δ Δ'} → Γ ⊢s Δ → Δ ≡ Δ' → Γ ⊢s Δ'
+  subEqLemma emptySub (emp x x₁) = equiv (emp x x) emptySub (emp x x₁)
+  subEqLemma emptySub (decom x x₁ eq) = equiv (emp sinE sinE) emptySub (decom x x₁ eq)
+  subEqLemma var (emp x x₁) = equiv (emp x x) var (emp x x₁)
+  subEqLemma var (decom x x₁ eq) = equiv (decom (SD sinE) (SD sinE) (emp sinE sinE)) var
+                                     (decom x x₁ eq)
+  subEqLemma (comma sub sub₁) (emp (mulE x x₁) x₂) = equiv refl (comma (subEqLemma sub (sym (emptyLemma x))) (subEqLemma sub₁ (sym (emptyLemma x₁)))) (emp (mulE sinE sinE) x₂)
+  subEqLemma (comma sub sub₁) (decom (MD1 x) x₁ eq) = {!!}
+  subEqLemma (comma sub sub₁) (decom (MD2 x) x₁ eq) = {!!}
+  subEqLemma (equiv x sub x₁) decpf = equiv x (subEqLemma sub x₁) decpf
+
+  subDecLemma : ∀{Γ₁ A Δ₁ Δ₂} → Γ₁ ⊢s Δ₁ → Δ₁ decTo sCtx A and Δ₂ → Σ[ B ∈ Tp ] Σ[ Γ₂ ∈ Ctx ] ((Γ₁ decTo sCtx B and Γ₂) × sCtx A ⊢s sCtx B × Δ₂ ⊢s Γ₂)
+  subDecLemma emptySub ()
+  subDecLemma {A = A} var (SD x) = A , (· , (SD sinE , (var , equiv (emp x sinE) emptySub (emp sinE sinE))))
+  subDecLemma (comma sub sub₁) (MD1 decpf) = {!!}
+  subDecLemma (comma sub sub₁) (MD2 decpf) = {!!}
+  subDecLemma (equiv x sub x₁) (SD x₂) = {!!}
+  subDecLemma (equiv x sub x₁) (MD1 decpf) = {!!}
+  subDecLemma (equiv x sub x₁) (MD2 decpf) = {!!}
 
   dan : (Γ Γ' Γ₁' Γ₂' : Ctx) → Γ ⊢s Γ' → Γ' ≡ (Γ₁' , Γ₂') → Σ[ Γ₁ ∈ Ctx ] Σ[ Γ₂ ∈ Ctx ] ((Γ₁ , Γ₂) ≡ Γ × Γ₁ ⊢s Γ₁' × Γ₂ ⊢s Γ₂')
   dan .· .· Γ₁' Γ₂' emptySub (emp x (mulE x₁ x₂)) = · , · , emp (mulE x x) x , equiv (emp x x) emptySub (emp x x₁) , equiv (emp x x) emptySub (emp x x₂)
